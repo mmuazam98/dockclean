@@ -7,6 +7,10 @@ DockClean is a simple Go-based tool that cleans up unused Docker images from you
 - List unused Docker images (images without tags)
 - Remove unused Docker images with a single command
 
+## Prerequisites
+
+- Install Go - https://go.dev/dl/
+
 ## Installation
 
 1. Clone the repository:
@@ -25,6 +29,8 @@ DockClean is a simple Go-based tool that cleans up unused Docker images from you
 3. Build the binary:
    ```bash
    go build -o dockclean ./cmd/cleaner
+   # On Windows Run
+   go build -o dockclean.exe ./cmd/cleaner
    ```
 
 ## Usage
@@ -37,6 +43,8 @@ To list and remove unused Docker images:
 
 ```bash
 ./dockclean
+# On Windows Run
+dockclean.exe
 ```
 
 This command will:
@@ -51,6 +59,8 @@ If you want to preview the images that would be deleted without actually removin
 
 ````bash
 ./dockclean --dry-run
+# On Windows Run
+dockclean.exe --dry-run
 
 ## Sample Output
 
