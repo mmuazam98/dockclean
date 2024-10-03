@@ -1,1 +1,6 @@
+# binary for linux machine
 /dockclean
+# binary for windows machine
+/dockclean.exe 
+# Dockerfile that can be used for testing
+/Dockerfile

@@ -4,27 +4,38 @@ import (
 	"flag"
 	"log"
 
+	"github.com/docker/docker/client"
 	"github.com/mmuazam98/dockclean/pkg/docker"
 )
 
-func main() {
+func parseFlag(cli *client.Client) {
 	dryRun := flag.Bool("dry-run", false, "List unused Docker images without deleting them")
+	removeStopped := flag.Bool("remove-stopped", false, "Remove Images Associated with Stopped Containers")
+
 	flag.Parse()
 
-	cli, err := docker.NewDockerClient()
+	if *dryRun {
+		docker.PrintUnusedImages(cli)
+	} else if *removeStopped {
+		docker.CleanupStoppedContainerImages(cli)
+	} else {
+		docker.RemoveUnusedImages(cli)
+	}
+}
+
+func main() {
+	cli, err := initDockerClient()
 	if err != nil {
 		log.Fatalf("Failed to initialize Docker client: %v", err)
 	}
 
-	// List and clean unused Docker images
-	unusedImages, err := docker.ListUnusedImages(cli)
-	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
-	}
+	parseFlag(cli)
+}
 
-	if *dryRun {
-		docker.PrintUnusedImages(unusedImages)
-	} else {
-		docker.RemoveUnusedImages(cli, unusedImages)
+func initDockerClient() (*client.Client, error) {
+	cli, err := docker.NewDockerClient()
+	if err != nil {
+		return nil, err
 	}
+	return cli, nil
 }
