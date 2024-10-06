@@ -2,26 +2,14 @@ package docker
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
 )
 
-// NewDockerClient initializes a new Docker client
-func NewDockerClient() (*client.Client, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	cli.NegotiateAPIVersion(context.Background())
-	return cli, nil
-}
-
 // CleanupStoppedContainerImages removes images associated with stopped containers
-func CleanupStoppedContainerImages(cli *client.Client) {
+func (d *DockerClient) CleanupStoppedContainerImages() {
 
 	const (
 		ImageStateUnreferenced = -1
@@ -30,7 +18,7 @@ func CleanupStoppedContainerImages(cli *client.Client) {
 	)
 
 	// List all images
-	images, err := cli.ImageList(context.Background(), image.ListOptions{})
+	images, err := d.CLI.ImageList(context.Background(), image.ListOptions{})
 	if err != nil {
 		log.Fatalf("Error listing images: %v", err)
 	}
@@ -45,7 +33,7 @@ func CleanupStoppedContainerImages(cli *client.Client) {
 	}
 
 	// List all containers
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
+	containers, err := d.CLI.ContainerList(context.Background(), container.ListOptions{All: true})
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +62,7 @@ func CleanupStoppedContainerImages(cli *client.Client) {
 
 	for imageId, removalState := range imagesForCleanup {
 		if removalState == ImageStateExited {
-			_, err := cli.ImageRemove(context.Background(), imageId, opts)
+			_, err := d.CLI.ImageRemove(context.Background(), imageId, opts)
 			if err != nil {
 				log.Printf("Failed to remove image %s: %v", imageId, err)
 			} else {
@@ -82,7 +70,7 @@ func CleanupStoppedContainerImages(cli *client.Client) {
 				// Remove associated containers only if the image was successfully deleted
 				for containerID, imageID := range containersToRemove {
 					if imageID == imageId {
-						if err := cli.ContainerRemove(context.Background(), containerID, container.RemoveOptions{Force: true}); err != nil {
+						if err := d.CLI.ContainerRemove(context.Background(), containerID, container.RemoveOptions{Force: true}); err != nil {
 							log.Printf("Failed to remove stopped container %s: %v", containerID, err)
 						} else {
 							log.Printf("Successfully removed stopped container %s", containerID)
@@ -93,64 +81,4 @@ func CleanupStoppedContainerImages(cli *client.Client) {
 		}
 	}
 
-}
-
-// ListUnusedImages returns a list of unused Docker images
-func ListUnusedImages(cli *client.Client) ([]image.Summary, error) {
-	images, err := cli.ImageList(context.Background(), image.ListOptions{All: true})
-	if err != nil {
-		return nil, err
-	}
-
-	var unusedImages []image.Summary
-	for _, image := range images {
-		// Filter images without RepoTags (untagged or unused images)
-		if len(image.RepoTags) == 0 {
-			unusedImages = append(unusedImages, image)
-		}
-	}
-
-	if len(unusedImages) > 0 {
-		fmt.Printf("Found %d unused images\n", len(unusedImages))
-	}
-	return unusedImages, nil
-}
-
-// RemoveUnusedImages deletes unused Docker images
-func RemoveUnusedImages(cli *client.Client) {
-
-	images, err := ListUnusedImages(cli)
-	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
-	}
-
-	opts := image.RemoveOptions{Force: true}
-
-	for _, image := range images {
-		_, err := cli.ImageRemove(context.Background(), image.ID, opts)
-		if err != nil {
-			log.Printf("Failed to remove image %s: %v", image.ID, err)
-		} else {
-			log.Printf("Successfully removed image %s", image.ID)
-		}
-	}
-}
-
-// PrintUnusedImages lists the images that would be removed (Dry Run)
-func PrintUnusedImages(cli *client.Client) {
-
-	images, err := ListUnusedImages(cli)
-	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
-	}
-
-	if len(images) == 0 {
-		fmt.Println("No unused images found.")
-		return
-	}
-
-	fmt.Println("The following images would be removed:")
-	for _, image := range images {
-		fmt.Printf("ID: %s, Created: %d\n", image.ID, image.Created)
-	}
 }
