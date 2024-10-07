@@ -1,30 +1,30 @@
 package main
 
 import (
-	"flag"
 	"log"
 
-	"github.com/mmuazam98/dockclean/pkg/docker"
+	"github.com/mmuazam98/dockclean/internal/docker"
+	"github.com/mmuazam98/dockclean/pkg/utils"
 )
 
 func main() {
-	dryRun := flag.Bool("dry-run", false, "List unused Docker images without deleting them")
-	flag.Parse()
 
-	cli, err := docker.NewDockerClient()
+	var dc docker.DockerClient
+
+	err := dc.InitDockerClient()
 	if err != nil {
-		log.Fatalf("Failed to initialize Docker client: %v", err)
+		log.Fatalf("Error initializing docker client : %v", err)
 	}
 
-	// List and clean unused Docker images
-	unusedImages, err := docker.ListUnusedImages(cli)
-	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+	f := utils.ParseFlags()
+
+	switch {
+	case f.DryRun:
+		dc.PrintUnusedImages()
+	case f.RemoveStopped:
+		dc.CleanupStoppedContainerImages()
+	default:
+		dc.RemoveUnusedImages()
 	}
 
-	if *dryRun {
-		docker.PrintUnusedImages(unusedImages)
-	} else {
-		docker.RemoveUnusedImages(cli, unusedImages)
-	}
 }
