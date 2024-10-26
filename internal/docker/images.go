@@ -26,9 +26,6 @@ func (d *DockerClient) ListUnusedImages() ([]image.Summary, error) {
 		}
 	}
 
-	if len(unusedImages) > 0 {
-		fmt.Printf("Found %d unused images\n", len(unusedImages))
-	}
 	return unusedImages, nil
 }
 
@@ -141,6 +138,65 @@ func formatLabels(labels map[string]string) string {
 	}
 
 	return strings.Join(labelStore, ", ")
+}
+
+// Remove Images that exceed a specific size limit
+func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit int64, unit string) {
+
+	var sizeLimitInBytes int64 = toBytes(sizeLimit, unit)
+
+	images, err := d.ListUnusedImages()
+	if err != nil {
+		log.Fatalf("Error listing images: %v", err)
+	}
+
+	if len(images) == 0 {
+		log.Println("No unused images found")
+		return
+	}
+
+	opts := image.RemoveOptions{Force: true}
+
+	removedImagesCount := 0
+	totalSizeCleaned := int64(0)
+
+	for _, image := range images {
+
+		// checking and removing images exceeding the threshold size
+		if image.Size >= sizeLimitInBytes {
+			_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+			if err != nil {
+				log.Printf("Failed to remove image %s: %v", image.ID, err)
+			} else {
+				log.Printf("Successfully removed image %s", image.ID)
+			}
+
+			totalSizeCleaned += image.Size
+			removedImagesCount++
+		}
+
+	}
+
+	if removedImagesCount > 0 {
+		log.Printf("Summary: Removed %d images (Total space freed: %s)", removedImagesCount, formatSize(totalSizeCleaned))
+	} else {
+		fmt.Printf("No Unused Images are exceeding the limit %d %s", sizeLimit, strings.ToUpper(unit))
+	}
+
+}
+
+// converts any value of any value to bytes
+func toBytes(size int64, unit string) int64 {
+
+	var multipliers map[string]int64 = map[string]int64{
+		"b":  1,
+		"kb": 1024,
+		"mb": 1024 * 1024,
+		"gb": 1024 * 1024 * 1024,
+	}
+
+	return size * multipliers[unit]
+
 }
 
 // RemoveUnusedImages deletes unused Docker images

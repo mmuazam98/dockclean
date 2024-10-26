@@ -25,6 +25,12 @@ func main() {
 		dc.CleanupStoppedContainerImages()
 	case f.VerboseMode:
 		dc.VerboseModeCleanup()
+	case f.SizeLimit.Value >= 0:
+		var unit string = f.GetSizeUnit()
+		if unit == "" {
+			log.Fatalf("Please specify a size unit (B, KB, MB, or GB)")
+		}
+		dc.RemoveExceedSizeLimit(f.SizeLimit.Value, unit)
 	default:
 		dc.RemoveUnusedImages()
 	}
