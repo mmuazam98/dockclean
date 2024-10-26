@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/image"
 )
@@ -66,10 +68,15 @@ func (d *DockerClient) VerboseModeCleanup() {
 
 	log.Printf("Found %d unused images. Starting removal in verbose mode...\n", len(images))
 
+	const (
+		tableline   = "----------------------------------------------------------------------------------------------------------------------------------------------------"
+		tableformat = "%-35s %-12s %-30s %-15s %-30s\n"
+	)
+
 	// Print table header
-	fmt.Println("---------------------------------------------------------------")
-	fmt.Printf("%-15s %-12s %-15s %s\n", "ID", "Size (bytes)", "Created (Unix)", "Labels")
-	fmt.Println("---------------------------------------------------------------")
+	fmt.Println(tableline)
+	fmt.Printf(tableformat, "ID", "Size", "Created (RFC3339)", "Status", "Labels")
+	fmt.Println(tableline)
 
 	// Iterate over each unused image and attempt removal
 	for _, image := range images {
@@ -78,22 +85,62 @@ func (d *DockerClient) VerboseModeCleanup() {
 		if err != nil {
 			log.Printf("Failed to remove image %s: %v\n", image.ID, err)
 		} else {
-			// Print image information in a table-like format
-			fmt.Printf("%-15s %-12d %-15d ", image.ID[:12], image.Size, image.Created)
+			// timestamp in RFC3339 format
+			created := time.Unix(image.Created, 0).Format(time.RFC3339)
+			truncatedDockerImageID := truncateDockerImageID(image.ID, 32)
 
-			// Display labels
-			if len(image.Labels) > 0 {
-				labelStr := ""
-				for key, value := range image.Labels {
-					labelStr += fmt.Sprintf("%s:%s, ", key, value)
-				}
-				fmt.Println(labelStr[:len(labelStr)-2]) // Remove the last comma
-			} else {
-				fmt.Println("No labels")
-			}
+			// Print image information in a table-like format
+			fmt.Printf(tableformat,
+				truncatedDockerImageID,
+				formatSize(image.Size),
+				created,
+				"Removed",
+				formatLabels(image.Labels),
+			)
 		}
 	}
 
+}
+
+// Helper function to truncate strings with ellipsis
+func truncateDockerImageID(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// Helper function to converts bytes to human-readable format
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// Helper function used to format the docker image labels Key Value Pairs
+func formatLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "No Labels Found"
+	}
+
+	var labelStore []string
+	for labelKey, labelValue := range labels {
+		// Handling empty values
+		if labelValue == "" {
+			labelStore = append(labelStore, labelKey)
+			continue
+		}
+		labelStore = append(labelStore, fmt.Sprintf("%s:%s", labelKey, labelValue))
+	}
+
+	return strings.Join(labelStore, ", ")
 }
 
 // RemoveUnusedImages deletes unused Docker images
