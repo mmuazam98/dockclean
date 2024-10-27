@@ -30,37 +30,41 @@ func (d *DockerClient) ListUnusedImages() ([]image.Summary, error) {
 }
 
 // PrintUnusedImages lists the images that would be removed (Dry Run)
-func (d *DockerClient) PrintUnusedImages() {
+func (d *DockerClient) PrintUnusedImages() error {
 
 	images, err := d.ListUnusedImages()
 	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+		log.Printf("Error listing images: %v", err)
+		return err
 	}
 
 	if len(images) == 0 {
-		fmt.Println("No unused images found.")
-		return
+		log.Printf("No unused images found.")
+		return nil
 	}
 
-	fmt.Println("The following images would be removed:")
+	log.Println("The following images would be removed:")
 	for _, image := range images {
-		fmt.Printf("ID: %s, Created: %d\n", image.ID, image.Created)
+		log.Printf("ID: %s, Created: %d\n", image.ID, image.Created)
 	}
+
+	return nil
 }
 
 // VerboseModeCleanup gives more details while doing the cleanup of unused images
-func (d *DockerClient) VerboseModeCleanup() {
+func (d *DockerClient) VerboseModeCleanup() error {
 
 	images, err := d.ListUnusedImages()
 	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+		log.Printf("Error listing images: %v", err)
+		return err
 	}
 
 	opts := image.RemoveOptions{Force: true}
 
 	if len(images) == 0 {
 		log.Println("No unused images found")
-		return
+		return nil
 	}
 
 	log.Printf("Found %d unused images. Starting removal in verbose mode...\n", len(images))
@@ -84,75 +88,35 @@ func (d *DockerClient) VerboseModeCleanup() {
 		} else {
 			// timestamp in RFC3339 format
 			created := time.Unix(image.Created, 0).Format(time.RFC3339)
-			truncatedDockerImageID := truncateDockerImageID(image.ID, 32)
 
 			// Print image information in a table-like format
 			fmt.Printf(tableformat,
-				truncatedDockerImageID,
-				formatSize(image.Size),
+				FormatDockerImageID(image.ID, 32),
+				FormatSize(image.Size),
 				created,
 				"Removed",
-				formatLabels(image.Labels),
+				FormatLabels(image.Labels),
 			)
 		}
 	}
 
-}
-
-// Helper function to truncate strings with ellipsis
-func truncateDockerImageID(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}
-
-// Helper function to converts bytes to human-readable format
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// Helper function used to format the docker image labels Key Value Pairs
-func formatLabels(labels map[string]string) string {
-	if len(labels) == 0 {
-		return "No Labels Found"
-	}
-
-	var labelStore []string
-	for labelKey, labelValue := range labels {
-		// Handling empty values
-		if labelValue == "" {
-			labelStore = append(labelStore, labelKey)
-			continue
-		}
-		labelStore = append(labelStore, fmt.Sprintf("%s:%s", labelKey, labelValue))
-	}
-
-	return strings.Join(labelStore, ", ")
+	return nil
 }
 
 // Remove Images that exceed a specific size limit
-func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit int64, unit string) {
+func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit float64, unit string) error {
 
-	var sizeLimitInBytes int64 = toBytes(sizeLimit, unit)
+	var sizeLimitInBytes int64 = int64(ToBytes(sizeLimit, unit))
 
 	images, err := d.ListUnusedImages()
 	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+		log.Printf("Error listing images: %v", err)
+		return err
 	}
 
 	if len(images) == 0 {
-		log.Println("No unused images found")
-		return
+		log.Printf("No unused images found")
+		return nil
 	}
 
 	opts := image.RemoveOptions{Force: true}
@@ -163,7 +127,7 @@ func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit int64, unit string) {
 	for _, image := range images {
 
 		// checking and removing images exceeding the threshold size
-		if image.Size >= sizeLimitInBytes {
+		if image.Size > sizeLimitInBytes {
 			_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
 			if err != nil {
 				log.Printf("Failed to remove image %s: %v", image.ID, err)
@@ -178,33 +142,21 @@ func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit int64, unit string) {
 	}
 
 	if removedImagesCount > 0 {
-		log.Printf("Summary: Removed %d images (Total space freed: %s)", removedImagesCount, formatSize(totalSizeCleaned))
+		log.Printf("Summary: Removed %d images (Total space freed: %s)", removedImagesCount, FormatSize(totalSizeCleaned))
 	} else {
-		fmt.Printf("No Unused Images are exceeding the limit %d %s", sizeLimit, strings.ToUpper(unit))
+		log.Printf("No Unused Images are exceeding the limit %d %s", int64(sizeLimit), strings.ToUpper(unit))
 	}
 
-}
-
-// converts any value of any value to bytes
-func toBytes(size int64, unit string) int64 {
-
-	var multipliers map[string]int64 = map[string]int64{
-		"b":  1,
-		"kb": 1024,
-		"mb": 1024 * 1024,
-		"gb": 1024 * 1024 * 1024,
-	}
-
-	return size * multipliers[unit]
-
+	return nil
 }
 
 // RemoveUnusedImages deletes unused Docker images
-func (d *DockerClient) RemoveUnusedImages() {
+func (d *DockerClient) RemoveUnusedImages() error {
 
 	images, err := d.ListUnusedImages()
 	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+		log.Printf("Error listing images: %v", err)
+		return err
 	}
 
 	opts := image.RemoveOptions{Force: true}
@@ -215,7 +167,8 @@ func (d *DockerClient) RemoveUnusedImages() {
 			log.Printf("Failed to remove image %s: %v", image.ID, err)
 		} else {
 			log.Printf("Successfully removed image %s", image.ID)
-
 		}
 	}
+
+	return nil
 }

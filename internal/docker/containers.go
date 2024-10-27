@@ -9,7 +9,7 @@ import (
 )
 
 // CleanupStoppedContainerImages removes images associated with stopped containers
-func (d *DockerClient) CleanupStoppedContainerImages() {
+func (d *DockerClient) CleanupStoppedContainerImages() error {
 
 	const (
 		ImageStateUnreferenced = -1
@@ -20,7 +20,8 @@ func (d *DockerClient) CleanupStoppedContainerImages() {
 	// List all images
 	images, err := d.CLI.ImageList(context.Background(), image.ListOptions{})
 	if err != nil {
-		log.Fatalf("Error listing images: %v", err)
+		log.Printf("Error listing images: %v", err)
+		return err
 	}
 
 	imagesForCleanup := make(map[string]int8)
@@ -81,4 +82,5 @@ func (d *DockerClient) CleanupStoppedContainerImages() {
 		}
 	}
 
+	return nil
 }
