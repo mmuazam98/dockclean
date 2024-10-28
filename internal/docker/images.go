@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/image"
 )
@@ -49,6 +51,98 @@ func (d *DockerClient) PrintUnusedImages() {
 	}
 }
 
+// VerboseModeCleanup gives more details while doing the cleanup of unused images
+func (d *DockerClient) VerboseModeCleanup() {
+
+	images, err := d.ListUnusedImages()
+	if err != nil {
+		log.Fatalf("Error listing images: %v", err)
+	}
+
+	opts := image.RemoveOptions{Force: true}
+
+	if len(images) == 0 {
+		log.Println("No unused images found")
+		return
+	}
+
+	log.Printf("Found %d unused images. Starting removal in verbose mode...\n", len(images))
+
+	const (
+		tableline   = "----------------------------------------------------------------------------------------------------------------------------------------------------"
+		tableformat = "%-35s %-12s %-30s %-15s %-30s\n"
+	)
+
+	// Print table header
+	fmt.Println(tableline)
+	fmt.Printf(tableformat, "ID", "Size", "Created (RFC3339)", "Status", "Labels")
+	fmt.Println(tableline)
+
+	// Iterate over each unused image and attempt removal
+	for _, image := range images {
+		// Remove the image
+		_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+		if err != nil {
+			log.Printf("Failed to remove image %s: %v\n", image.ID, err)
+		} else {
+			// timestamp in RFC3339 format
+			created := time.Unix(image.Created, 0).Format(time.RFC3339)
+			truncatedDockerImageID := truncateDockerImageID(image.ID, 32)
+
+			// Print image information in a table-like format
+			fmt.Printf(tableformat,
+				truncatedDockerImageID,
+				formatSize(image.Size),
+				created,
+				"Removed",
+				formatLabels(image.Labels),
+			)
+		}
+	}
+
+}
+
+// Helper function to truncate strings with ellipsis
+func truncateDockerImageID(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// Helper function to converts bytes to human-readable format
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// Helper function used to format the docker image labels Key Value Pairs
+func formatLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "No Labels Found"
+	}
+
+	var labelStore []string
+	for labelKey, labelValue := range labels {
+		// Handling empty values
+		if labelValue == "" {
+			labelStore = append(labelStore, labelKey)
+			continue
+		}
+		labelStore = append(labelStore, fmt.Sprintf("%s:%s", labelKey, labelValue))
+	}
+
+	return strings.Join(labelStore, ", ")
+}
+
 // RemoveUnusedImages deletes unused Docker images
 func (d *DockerClient) RemoveUnusedImages() {
 
@@ -65,6 +159,7 @@ func (d *DockerClient) RemoveUnusedImages() {
 			log.Printf("Failed to remove image %s: %v", image.ID, err)
 		} else {
 			log.Printf("Successfully removed image %s", image.ID)
+
 		}
 	}
 }

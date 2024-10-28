@@ -23,6 +23,8 @@ func main() {
 		dc.PrintUnusedImages()
 	case f.RemoveStopped:
 		dc.CleanupStoppedContainerImages()
+	case f.VerboseMode:
+		dc.VerboseModeCleanup()
 	default:
 		dc.RemoveUnusedImages()
 	}
