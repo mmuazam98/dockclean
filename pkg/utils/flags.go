@@ -10,14 +10,15 @@ type Size struct {
 }
 
 type Flags struct {
-	DryRun        bool
-	RemoveStopped bool
-	VerboseMode   bool
-	SizeLimit     Size
-	B             bool
-	KB            bool
-	MB            bool
-	GB            bool
+	DryRun           bool
+	RemoveStopped    bool
+	VerboseMode      bool
+	SizeLimit        Size
+	B                bool
+	KB               bool
+	MB               bool
+	GB               bool
+	ConcurrentDelete bool
 }
 
 func (f *Flags) GetSizeUnit() string {
@@ -44,6 +45,7 @@ func ParseFlags() *Flags {
 	flag.BoolVar(&f.KB, "KB", false, "Specify the size unit as kilobytes")
 	flag.BoolVar(&f.MB, "MB", false, "Specify the size unit as megabytes")
 	flag.BoolVar(&f.GB, "GB", false, "Specify the size unit as gigabytes")
+	flag.BoolVar(&f.ConcurrentDelete, "concurrent", false, "Enable concurrent deletion of Docker images using Go routines")
 
 	flag.Parse()
 	return f
