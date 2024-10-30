@@ -82,7 +82,7 @@ func (d *DockerClient) VerboseModeCleanup() error {
 	// Iterate over each unused image and attempt removal
 	for _, image := range images {
 		// Remove the image
-		_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+		err := RemoveDockerImage(d, context.Background(), image.ID, opts)
 		if err != nil {
 			log.Printf("Failed to remove image %s: %v\n", image.ID, err)
 		} else {
@@ -128,7 +128,7 @@ func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit float64, unit string) err
 
 		// checking and removing images exceeding the threshold size
 		if image.Size > sizeLimitInBytes {
-			_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+			err := RemoveDockerImage(d, context.Background(), image.ID, opts)
 			if err != nil {
 				log.Printf("Failed to remove image %s: %v", image.ID, err)
 			} else {
@@ -162,7 +162,7 @@ func (d *DockerClient) RemoveUnusedImages() error {
 	opts := image.RemoveOptions{Force: true}
 
 	for _, image := range images {
-		_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+		err := RemoveDockerImage(d, context.Background(), image.ID, opts)
 		if err != nil {
 			log.Printf("Failed to remove image %s: %v", image.ID, err)
 		} else {
@@ -171,4 +171,10 @@ func (d *DockerClient) RemoveUnusedImages() error {
 	}
 
 	return nil
+}
+
+// RemoveDockerImage
+func RemoveDockerImage(d *DockerClient, ctx context.Context, imageID string, opts image.RemoveOptions) error {
+	_, err := d.CLI.ImageRemove(context.Background(), imageID, opts)
+	return err
 }
