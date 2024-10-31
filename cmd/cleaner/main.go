@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/mmuazam98/dockclean/internal/docker"
@@ -32,7 +33,15 @@ func main() {
 		}
 		dc.RemoveExceedSizeLimit(f.SizeLimit.Value, unit)
 	default:
-		dc.RemoveUnusedImages()
+		var exectionTime string
+		if f.ConcurrentDelete {
+			exectionTime = docker.MeasureExecutionTime(func() { dc.RemoveUnusedImages(true) })
+			fmt.Println("Execution Time ( Concurrent ) : ", exectionTime)
+		} else {
+			exectionTime = docker.MeasureExecutionTime(func() { dc.RemoveUnusedImages(false) })
+			fmt.Println("Execution Time ( Sequential ) : ", exectionTime)
+		}
+
 	}
 
 }

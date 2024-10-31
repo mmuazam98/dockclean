@@ -1,8 +1,12 @@
 package docker
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/docker/docker/api/types/image"
 )
 
 // Helper function to truncate docker image ID with ellipsis
@@ -56,4 +60,18 @@ func ToBytes(size float64, unit string) float64 {
 	}
 
 	return size * multipliers[unit]
+}
+
+// RemoveDockerImage
+func RemoveDockerImage(d *DockerClient, ctx context.Context, imageID string, opts image.RemoveOptions) error {
+	_, err := d.CLI.ImageRemove(context.Background(), imageID, opts)
+	return err
+}
+
+// Measure Execution Time
+func MeasureExecutionTime(f func()) string {
+	startTime := time.Now()
+	f()
+	duration := time.Since(startTime)
+	return duration.String()
 }

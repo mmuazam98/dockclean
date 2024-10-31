@@ -63,7 +63,7 @@ func (d *DockerClient) CleanupStoppedContainerImages() error {
 
 	for imageId, removalState := range imagesForCleanup {
 		if removalState == ImageStateExited {
-			_, err := d.CLI.ImageRemove(context.Background(), imageId, opts)
+			err := RemoveDockerImage(d, context.Background(), imageId, opts)
 			if err != nil {
 				log.Printf("Failed to remove image %s: %v", imageId, err)
 			} else {

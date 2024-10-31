@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/image"
@@ -82,7 +83,7 @@ func (d *DockerClient) VerboseModeCleanup() error {
 	// Iterate over each unused image and attempt removal
 	for _, image := range images {
 		// Remove the image
-		_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+		err := RemoveDockerImage(d, context.Background(), image.ID, opts)
 		if err != nil {
 			log.Printf("Failed to remove image %s: %v\n", image.ID, err)
 		} else {
@@ -128,7 +129,7 @@ func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit float64, unit string) err
 
 		// checking and removing images exceeding the threshold size
 		if image.Size > sizeLimitInBytes {
-			_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+			err := RemoveDockerImage(d, context.Background(), image.ID, opts)
 			if err != nil {
 				log.Printf("Failed to remove image %s: %v", image.ID, err)
 			} else {
@@ -151,7 +152,7 @@ func (d *DockerClient) RemoveExceedSizeLimit(sizeLimit float64, unit string) err
 }
 
 // RemoveUnusedImages deletes unused Docker images
-func (d *DockerClient) RemoveUnusedImages() error {
+func (d *DockerClient) RemoveUnusedImages(concurrent bool) error {
 
 	images, err := d.ListUnusedImages()
 	if err != nil {
@@ -160,15 +161,77 @@ func (d *DockerClient) RemoveUnusedImages() error {
 	}
 
 	opts := image.RemoveOptions{Force: true}
+	ctx := context.Background()
+
+	if concurrent {
+
+		err := removeImagesConcurrent(d, images, opts, ctx)
+		if err != nil {
+			log.Printf("Error removing the docker images concurrently : %v", err)
+			return err
+		} else {
+			log.Printf("Successfully removed all the docker images")
+		}
+
+	} else {
+
+		err := removeImagesSequential(d, images, opts, ctx)
+		if err != nil {
+			log.Printf("Error removing the docker images : %v", err)
+			return err
+		} else {
+			log.Printf("Successfully removed all the docker images")
+		}
+	}
+
+	return nil
+}
+
+// concurrent delete docker images
+func removeImagesConcurrent(d *DockerClient, images []image.Summary, opts image.RemoveOptions, ctx context.Context) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(images))
 
 	for _, image := range images {
-		_, err := d.CLI.ImageRemove(context.Background(), image.ID, opts)
+		wg.Add(1)
+		go handleConcurrentImageDeletion(d, ctx, image.ID, opts, &wg, errChan)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// sequential delete docker images
+func removeImagesSequential(d *DockerClient, images []image.Summary, opts image.RemoveOptions, ctx context.Context) error {
+
+	for _, image := range images {
+		err := RemoveDockerImage(d, ctx, image.ID, opts)
 		if err != nil {
 			log.Printf("Failed to remove image %s: %v", image.ID, err)
+			return err
 		} else {
 			log.Printf("Successfully removed image %s", image.ID)
 		}
 	}
 
 	return nil
+
+}
+
+// handle single image during concurrent deletion
+func handleConcurrentImageDeletion(d *DockerClient, ctx context.Context, imageID string, opts image.RemoveOptions, wg *sync.WaitGroup, errChan chan<- error) {
+	defer wg.Done()
+	if err := RemoveDockerImage(d, ctx, imageID, opts); err != nil {
+		errChan <- fmt.Errorf("failed to delete image %s : %w", imageID, err)
+	} else {
+		log.Printf("Successfully removed image %s", imageID)
+	}
 }
